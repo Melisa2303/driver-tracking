@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Driver - Enviar ubicación</title>
+</head>
+<body>
+  <h3>Conductor — Enviar ubicación a Google Sheets</h3>
+  <label>Driver ID: <input id="driverId" value="driver1" /></label>
+  <button id="start">Start</button>
+  <button id="stop" disabled>Stop</button>
+  <p id="status">Stopped</p>
+
+  <script>
+    // CONFIG: URL del Apps Script (Web app URL) proporcionada
+    const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyimNqqUvd2KZrotp1p29MLIKzsCtLvr1nL4iLbleiplTRqIRNAwjiwnamxJQHjrjVeOA/exec";
+
+    let watchId = null;
+    let lastSent = 0;
+    let lastPos = null;
+    const MIN_INTERVAL_MS = 3000; // enviar máximo cada 3s
+    const MIN_DISTANCE_M = 10;    // o solo si se movió >10 m
+
+    function distanceMeters(lat1, lon1, lat2, lon2) {
+      function toRad(v){return v * Math.PI/180;}
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    document.getElementById('start').onclick = () => {
+      const driverId = (document.getElementById('driverId').value || 'driver1').trim();
+      if (!('geolocation' in navigator)) {
+        alert('Geolocation no soportado');
+        return;
+      }
+      document.getElementById('status').textContent = 'Solicitando ubicación...';
+
+      watchId = navigator.geolocation.watchPosition(pos => {
+        const now = Date.now();
+        const payload = {
+          driver_id: driverId,
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          speed: pos.coords.speed,
+          ts: pos.timestamp
+        };
+        const timeOk = (now - lastSent) > MIN_INTERVAL_MS;
+        const distOk = !lastPos || distanceMeters(lastPos.lat, lastPos.lon, payload.lat, payload.lon) > MIN_DISTANCE_M;
+        if (timeOk && distOk) {
+          fetch(WEBAPP_URL, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+          }).then(resp => resp.json()).then(j => {
+            if (j && j.ok) {
+              lastSent = now;
+              lastPos = {lat: payload.lat, lon: payload.lon};
+              document.getElementById('status').textContent = 'Enviado: ' + new Date(now).toLocaleTimeString();
+            } else {
+              document.getElementById('status').textContent = 'Error al enviar';
+            }
+          }).catch(err => {
+            console.error(err);
+            document.getElementById('status').textContent = 'Error de red';
+          });
+        } else {
+          document.getElementById('status').textContent = 'Saltado (throttle)';
+        }
+      }, err => {
+        console.error('geo error', err);
+        document.getElementById('status').textContent = 'Geo error: ' + err.message;
+      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
+
+      document.getElementById('start').disabled = true;
+      document.getElementById('stop').disabled = false;
+    };
+
+    document.getElementById('stop').onclick = () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      document.getElementById('status').textContent = 'Stopped';
+      document.getElementById('start').disabled = false;
+      document.getElementById('stop').disabled = true;
+    };
+  </script>
+</body>
+</html>
