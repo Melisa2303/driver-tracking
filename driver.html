@@ -13,7 +13,6 @@
   <p id="status">Stopped</p>
 
   <script>
-    // CONFIG: URL del Apps Script (Web app URL) proporcionada
     const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyimNqqUvd2KZrotp1p29MLIKzsCtLvr1nL4iLbleiplTRqIRNAwjiwnamxJQHjrjVeOA/exec";
 
     let watchId = null;
@@ -32,6 +31,16 @@
       return R * c;
     }
 
+    // Envía datos usando una petición GET tipo "beacon" mediante Image
+    function sendBeacon(params) {
+      // params: object con driver_id, lat, lon, speed, ts
+      const qp = new URLSearchParams(params).toString();
+      // Añadir un cache-buster
+      const img = new Image();
+      img.src = WEBAPP_URL + "?" + qp + "&_=" + Date.now();
+      // No necesitamos manejar onload/onerror; si falla, se ignora
+    }
+
     document.getElementById('start').onclick = () => {
       const driverId = (document.getElementById('driverId').value || 'driver1').trim();
       if (!('geolocation' in navigator)) {
@@ -46,28 +55,16 @@
           driver_id: driverId,
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
-          speed: pos.coords.speed,
-          ts: pos.timestamp
+          speed: pos.coords.speed || 0,
+          ts: pos.timestamp || now
         };
         const timeOk = (now - lastSent) > MIN_INTERVAL_MS;
         const distOk = !lastPos || distanceMeters(lastPos.lat, lastPos.lon, payload.lat, payload.lon) > MIN_DISTANCE_M;
         if (timeOk && distOk) {
-          fetch(WEBAPP_URL, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-          }).then(resp => resp.json()).then(j => {
-            if (j && j.ok) {
-              lastSent = now;
-              lastPos = {lat: payload.lat, lon: payload.lon};
-              document.getElementById('status').textContent = 'Enviado: ' + new Date(now).toLocaleTimeString();
-            } else {
-              document.getElementById('status').textContent = 'Error al enviar';
-            }
-          }).catch(err => {
-            console.error(err);
-            document.getElementById('status').textContent = 'Error de red';
-          });
+          sendBeacon(payload);
+          lastSent = now;
+          lastPos = {lat: payload.lat, lon: payload.lon};
+          document.getElementById('status').textContent = 'Enviado: ' + new Date(now).toLocaleTimeString();
         } else {
           document.getElementById('status').textContent = 'Saltado (throttle)';
         }
