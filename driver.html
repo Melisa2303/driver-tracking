@@ -18,9 +18,12 @@
     let watchId = null;
     let lastSent = 0;
     let lastPos = null;
-    const MIN_INTERVAL_MS = 3000; // enviar máximo cada 3s
-    const MIN_DISTANCE_M = 10;    // o solo si se movió >10 m
-
+//    const MIN_INTERVAL_MS = 3000; // enviar máximo cada 3s
+//    const MIN_DISTANCE_M = 10;    // o solo si se movió >10 m
+    
+    const MIN_INTERVAL_MS = 0; // enviar cada lectura durante pruebas
+    const MIN_DISTANCE_M = 0;  // enviar aunque no se mueva (pruebas)
+    
     function distanceMeters(lat1, lon1, lat2, lon2) {
       function toRad(v){return v * Math.PI/180;}
       const R = 6371000;
@@ -87,3 +90,4 @@
   </script>
 </body>
 </html>
+
